@@ -569,7 +569,4 @@ WHERE po.order_date >= '2025-04-01'
 -- 6. Statistical anomaly detection for pricing errors
 -- 7. Logistics optimization opportunities by distance and terms
 -- 8. Executive dashboard for strategic decision-making
--- 
--- Each query is designed to provide actionable business insights while
--- maintaining data integrity and handling edge cases appropriately.
 -- =============================================================================

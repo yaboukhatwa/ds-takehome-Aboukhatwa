@@ -29,6 +29,7 @@ Model_Anomaly.ipynb # Late delivery model, calibration, slice analysis, anomalie
 predictions.csv # Model predictions (order_id, p_late)
 
 sql_exercise task 6 .sql # All SQL queries for Task 6.D
+Sql outputs.xlsx #with the output of the SQL task
 autograde_metrics.py # Utility script from starter files
 DS_Takehome_Brief_and_Rubric.md # Original assignment brief
 REPORT.md # 2-page summary of approach and results

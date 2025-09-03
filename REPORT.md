@@ -1,79 +1,94 @@
 # Data Science Take-Home — Procurement & Supply Analytics
 
-## 1. What I Did
-The dataset covered suppliers, products, price lists, purchase orders, and deliveries.  
-I had four main goals:
-1. Check data quality and explore key patterns (EDA).  
-2. Build and evaluate a model to predict late deliveries.  
-3. Detect unusual or wrong-looking supplier prices.  
-4. Answer a set of SQL business questions.  
+## 1. Overview
+This project analyzes a procurement dataset covering suppliers, products, price lists, purchase orders, and deliveries.  
+The goals were to:
+- Check data quality and explore patterns (EDA).  
+- Build a model to predict late deliveries.  
+- Detect unusual supplier price entries.  
+- Answer key SQL questions for April–June 2025.  
 
-Throughout the project I made sure to only use features available **at order time** and I used a proper **time split**: training up to March 2025 and validating from April to June 2025.
-
----
-
-## 2. EDA Highlights
-- Joins worked cleanly; only a few missing values (distance, price validity).  
-- Roughly half of all orders were late (after promised date).  
-- Sea shipments and some supplier countries stood out as less reliable.  
-- Short-distance orders (<500 km) behaved oddly — not much signal in the features.  
-
-I flagged these issues early so I wouldn’t leak future info into the model.
+All modeling was done with a **temporal split**: training on orders up to 2025-03-31 and validating on orders from 2025-04-01 to 2025-06-30.  
+Features were restricted to **information available at order time** to avoid leakage.
 
 ---
 
-## 3. Late Delivery Model
-I started with a baseline Random Forest, then improved with gradient boosting and rolling history features. Results:
+## 2. Exploratory Data Analysis (Task 6.A)
+- **Joins:** Tables connected cleanly on `order_id`, `supplier_id`, and `sku`.  
+- **Missingness:** Some missing values in distance and price validity dates, but not critical.  
+- **Delivery outcomes:** Around half of orders were late; cancellations were excluded.  
+- **Patterns:**  
+  - Sea freight and some supplier countries showed higher late rates.  
+  - Short-distance (<500 km) orders were harder to explain, suggesting missing features (e.g., local congestion).  
+- **Seasonality:** Order volumes were stable; late rates slightly higher in Q2.  
 
+Visuals included: late rate by month, ship mode comparison, supplier heatmap, and distance bucket distribution.  
+
+**Conclusion:** The dataset is suitable for predictive modeling, though additional features would help explain short-distance behavior.
+
+---
+
+## 3. Late Delivery Prediction (Task 6.B)
+
+### Model Results
 | Model        | PR-AUC | ROC-AUC | Best F1 | Threshold |
 |--------------|--------|---------|---------|-----------|
 | Baseline RF  | 0.610  | 0.607   | 0.580   | 0.50      |
 | Improved v1  | 0.624  | 0.597   | 0.684   | 0.20      |
-| Improved v2  | 0.643  | 0.620   | 0.682   | 0.05      |
+| Improved v2  | 0.643  | 0.620   | 0.682   | 0.05\*    |
 
-Key points:
-- The final model clearly beats the baseline, especially in PR-AUC (the main metric).  
-- At a **15% capacity threshold**, precision was ~0.71, recall ~0.21 → good for triaging.  
-- The reliability diagram showed the model is a bit **under-confident**, so calibration would help.  
+\*Sweep found max F1 at threshold=0 (predict all orders late). I report 0.05 as a **practical threshold**.  
 
-Slice analysis:  
-- Strongest on sea freight and medium-distance orders.  
-- Weak on short-distance, which suggests missing features.
-
----
-
-## 4. Price Anomalies
-I converted all prices to EUR (USD→EUR = 0.92) and checked each (supplier, sku) series.  
-Method: simple z-scores → easy to explain.  
-- Extreme outliers (>3σ) = clear red flags.  
-- Moderate anomalies (2–3σ) = worth a second look.  
-Plots showed these visually, so it’s easy for the pricing team to spot issues.
+### Key Takeaways
+- **Performance:** PR-AUC improved from 0.610 → 0.643 with gradient boosting and rolling history features.  
+- **Thresholding:**  
+  - At **0.5**: balanced but weaker recall.  
+  - At **best-F1**: ~0.68.  
+  - At **capacity (15%)**: Precision 0.71, Recall 0.21 → good for triaging.  
+- **Calibration:**  
+  - Brier score = 0.241.  
+  - Reliability plot showed the model is **under-confident** → recommend Platt scaling or isotonic regression.  
+- **Slice analysis:**  
+  - Sea freight had the best separability (PR-AUC ~0.77).  
+  - Medium-distance (500–1499 km) performed better than short-distance (<500 km).  
+  - Supplier country patterns were consistent with overall results.  
 
 ---
 
-## 5. SQL Tasks
-All tasks are covered in `sql/sql_exercise.sql`.  
-Highlights:
-- **Monthly late rates by ship mode** (Apr–Jun 2025).  
-- **Top 5 suppliers by volume**, with late % and avg delay.  
-- **Trailing 90-day late rate** per supplier, labeled into categories.  
-- **Overlapping price windows** flagged as minor/moderate/major with conflict checks.  
-- **Attach valid price + normalize to EUR**, compute order value.  
-- **Top 10 price anomalies** by z-score.  
-- **Incoterm × distance buckets** with avg delays and late %.  
-- **Bonus:** used predictions to split top 10% risk vs the rest → high-risk bucket really did have higher actual late rates.
+## 4. Price Anomaly Detection (Task 6.C)
+- **Normalization:** All prices converted to EUR (USD→EUR = 0.92).  
+- **Method:** z-score on per-(supplier, sku) series; top 10 anomalies flagged.  
+- **Findings:**  
+  - Extreme outliers (>3σ) = strong candidates for data entry errors.  
+  - Moderate anomalies (2–3σ) highlight suppliers with unstable pricing.  
+- **Visuals:** Plots showed flagged anomalies clearly.  
+
+**Operationally:** This method is simple, explainable, and can be automated for alerts.
 
 ---
 
-## 6. Takeaways
-- The model adds clear value — it’s not perfect, but it helps ops focus on risky orders.  
-- Calibration is the next easy win.  
-- Sea freight and certain suppliers deserve extra monitoring.  
-- Price anomaly checks already catch obvious mistakes.  
-- SQL queries provide a reusable set of KPIs.  
+## 5. SQL Exercise (Task 6.D)
+Queries are in `sql/sql_exercise.sql` and outputs are included.  
 
-**If I had more time:**  
-- Add better features for short-distance orders (e.g., city congestion, supplier size).  
-- Build a simple dashboard to track model risk scores and price anomalies in real time.
+- **Monthly late rates:** Overall and by ship mode for Apr–Jun 2025.  
+- **Top 5 suppliers by volume:** With late % and avg delay.  
+- **Trailing 90-day rate:** For each order, strictly before order_date.  
+- **Overlapping price windows:** None detected with strict rules.  
+- **Valid pricing at order date:** Attached prices, normalized to EUR, with `order_value_eur`.  
+- **Price anomalies:** Top 10 |z| values flagged.  
+- **Incoterm × distance buckets:** Avg delays and late rates by category.  
+- **Bonus:** With predictions, top-10% high-risk orders showed higher actual late rates than the rest.  
 
 ---
+
+## 6. Conclusions & Recommendations
+- **Modeling:** Adds value by flagging risky orders, especially for sea freight and medium-distance shipments. Needs calibration for better probability estimates.  
+- **Operations:** Use a capacity-based threshold (e.g., top 15%) to balance workload and recall.  
+- **Suppliers:** Monitor high-volume suppliers with worsening 90-day late rates.  
+- **Pricing:** Outlier detection already highlights entries for immediate review.  
+- **Next steps:**  
+  - Engineer features for short-distance orders.  
+  - Deploy calibrated probabilities in dashboards.  
+  - Automate anomaly alerts for pricing and delivery performance.
+
+**Overall:** The project delivers a full pipeline from data quality checks to predictive modeling, anomaly detection, and SQL insights — with clear, actionable recommendations for procurement and operations teams.
